@@ -3,6 +3,8 @@ package de.foxat.mercury.base.modules;
 import de.foxat.mercury.api.MercuryModule;
 import de.foxat.mercury.api.config.ModuleConfigField;
 import de.foxat.mercury.base.MercuryLoader;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,9 +21,13 @@ import java.util.*;
  * */
 public class ModuleLoader {
 
+    public static final String LOGGER_NAME = "ModuleLoader";
+
     private final File localModuleDirectory;
     private final File[] remoteModuleDirectories;
     private final Map<String, MercuryModule> modules;
+
+    private final Logger logger;
 
     /**
      * The ModuleManager is responsible for loading, enabling
@@ -39,6 +45,7 @@ public class ModuleLoader {
         this.localModuleDirectory = localModuleDirectory;
         this.remoteModuleDirectories = remoteModuleDirectories.toArray(new File[0]);
         modules = new HashMap<>();
+        logger = LogManager.getLogger(LOGGER_NAME);
     }
 
     /**
@@ -55,7 +62,9 @@ public class ModuleLoader {
      * */
     public void enableLoadedModules() {
         modules.forEach((name, module) -> {
-            System.out.println("[SpigotMS] Enabling module " + name + " at " + module.getClass().getCanonicalName());
+            logger.info("Enabling module {} version {} by {}.", name,
+                    module.getConfig().getProperty(ModuleConfigField.VERSION),
+                    module.getConfig().getProperty(ModuleConfigField.AUTHOR));
             module.tryEnable();
         });
     }
@@ -65,7 +74,9 @@ public class ModuleLoader {
      * */
     public void disableLoadedModules() {
         modules.forEach((name, module) -> {
-            System.out.println("[SpigotMS] Disabling module " + name + " at " + module.getClass().getCanonicalName());
+            logger.info("Disabling module {} version {} by {}.", name,
+                    module.getConfig().getProperty(ModuleConfigField.VERSION),
+                    module.getConfig().getProperty(ModuleConfigField.AUTHOR));
             module.doDisable();
         });
     }
@@ -77,11 +88,14 @@ public class ModuleLoader {
     @SuppressWarnings("unused")
     public void loadModules() {
         if (Objects.nonNull(this.localModuleDirectory)) {
+            logger.info("Loading modules from local directory");
             registerModulesFromDirectories(this.localModuleDirectory);
         }
 
         if (Objects.nonNull(this.remoteModuleDirectories)) {
+            logger.info("Loading modules from remote directories");
             for (File directory : this.remoteModuleDirectories) {
+                logger.info("Checking out remote directory - {}", directory.getPath());
                 registerModulesFromDirectories(directory);
             }
         }
@@ -113,13 +127,13 @@ public class ModuleLoader {
 
         if (Objects.isNull(directory)) {
             // No directory specified
-            System.out.println("Cannot load modules from File: null");
+            logger.error("Cannot load modules from directory: null");
         } else if (!directory.canRead()) {
             // Can't read from the specified path
-            System.out.println("Cannot load modules from a read protected path!");
+            logger.error("Cannot load modules from a read protected path!");
         } else if (directory.isDirectory()) {
             // Load all files within the specified directory
-            ArrayList<File> files = new ArrayList<>(
+            List<File> files = new ArrayList<>(
                     Arrays.asList(
                             Objects.requireNonNull(directory.listFiles())
                     )
@@ -143,7 +157,7 @@ public class ModuleLoader {
                 exception.printStackTrace();
             }
         } else {
-            System.out.println("modules must be in the .jar format");
+            logger.error("Module at {} was neither a directory not in .jar format!", directory.getPath());
         }
 
         loadJARsFromURLIntoClasspath(urls);
@@ -157,13 +171,22 @@ public class ModuleLoader {
             // A list of all module.yml config files found inside the directory
             Enumeration<URL> configPaths = moduleClassLoader.findResources("module.properties");
 
-            if (configPaths.hasMoreElements()) {
-                // Read the file
-                InputStreamReader configFileStream = new InputStreamReader(configPaths.nextElement().openStream());
-                ModuleConfig moduleConfig = new ModuleConfig(configFileStream);
+            if (!configPaths.hasMoreElements()) {
+                logger.error("No module.properties config files found. Please check your jar contents.");
+            }
 
-            } else {
-                // TODO: Error Message - no module config found
+            while (configPaths.hasMoreElements()) {
+                URL nextUrl = configPaths.nextElement();
+
+                // Read the file
+                InputStreamReader configFileStream = new InputStreamReader(nextUrl.openStream());
+
+                try {
+                    ModuleConfig moduleConfig = new ModuleConfig(configFileStream);
+                    initializeModule(moduleClassLoader, moduleConfig);
+                } catch (IllegalStateException exception) {
+                    logger.error("Found invalid module configuration inside " + nextUrl.getPath(), exception);
+                }
             }
         } catch (IOException exception) {
             exception.printStackTrace();
@@ -185,14 +208,14 @@ public class ModuleLoader {
 
             // Add the module to the list
             modules.put(config.getProperty(ModuleConfigField.NAME), moduleInstance);
-        } catch (InstantiationException | InvocationTargetException | NoSuchMethodException exception) {
+        } catch (InstantiationException | InvocationTargetException | NoSuchMethodException
+                | IllegalAccessException | ClassNotFoundException exception) {
+
             // Could either not cast to MercuryModule or the jar is obfuscated
-            exception.printStackTrace();
-        } catch (IllegalAccessException | ClassNotFoundException exception) {
-            // bad jar
-            System.err.println("Please check your configuration files"); // TODO: Error Message - Please check your configuration files
+            logger.error("Could not load module at " + config.getProperty(ModuleConfigField.MAIN_CLASS), exception);
             exception.printStackTrace();
         }
+
     }
 
     /**

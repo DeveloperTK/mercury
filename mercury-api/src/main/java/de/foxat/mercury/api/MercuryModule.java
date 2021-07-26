@@ -6,6 +6,8 @@ public abstract class MercuryModule {
 
     private boolean enabledByDefault;
 
+    private AbstractModuleConfig config;
+
     public MercuryModule() {
         enabledByDefault = true;
     }
@@ -33,6 +35,10 @@ public abstract class MercuryModule {
     }
 
     public void setConfig(AbstractModuleConfig config) {
+        this.config = config;
+    }
 
+    public AbstractModuleConfig getConfig() {
+        return config;
     }
 }
