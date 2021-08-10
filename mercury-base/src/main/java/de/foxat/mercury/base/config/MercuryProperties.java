@@ -3,13 +3,14 @@ package de.foxat.mercury.base.config;
 import java.io.*;
 import java.util.Properties;
 
-public class MercuryConfig {
+@Deprecated(forRemoval = true)
+public class MercuryProperties {
 
-    private static MercuryConfig instance;
+    private static MercuryProperties instance;
 
     private final Properties properties;
 
-    private MercuryConfig() throws IOException {
+    private MercuryProperties() throws IOException {
         this.properties = new Properties();
         properties.load(new FileInputStream("config/discord-base.properties"));
 
@@ -38,10 +39,10 @@ public class MercuryConfig {
      *
      * @return singleton instance if existent
      */
-    public static MercuryConfig getInstance() {
+    public static MercuryProperties getInstance() {
         if (instance == null) {
             try {
-                instance = new MercuryConfig();
+                instance = new MercuryProperties();
             } catch (FileNotFoundException exception) {
                 createConfig();
                 throw new IllegalStateException("Please configure config/discord-base.properties", exception);
@@ -59,7 +60,7 @@ public class MercuryConfig {
      * @throws Error the file could not be created
      */
     private static void createConfig() {
-        try (FileWriter writer = new FileWriter("config/discord-base.properties");) {
+        try (FileWriter writer = new FileWriter("config/discord-base.properties")) {
             for (BaseConfigField field : BaseConfigField.values()) {
                 writer.append(field.name()).append("=");
 

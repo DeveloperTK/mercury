@@ -1,17 +1,17 @@
 package de.foxat.mercury.base.modules;
 
-import de.foxat.mercury.api.config.AbstractModuleConfig;
-import de.foxat.mercury.api.config.ModuleConfigField;
+import de.foxat.mercury.api.config.AbstractModuleProperties;
+import de.foxat.mercury.api.config.ModulePropertyField;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Properties;
 
-public class ModuleConfig extends AbstractModuleConfig {
+public class ModuleProperties extends AbstractModuleProperties {
 
     private final Properties properties;
 
-    public ModuleConfig(InputStreamReader reader) throws IOException {
+    public ModuleProperties(InputStreamReader reader) throws IOException {
         this.properties = new Properties();
         properties.load(reader);
 
@@ -26,7 +26,7 @@ public class ModuleConfig extends AbstractModuleConfig {
      * @return whether the config file is valid
      */
     private boolean isValidConfig() {
-        for (ModuleConfigField value : ModuleConfigField.values()) {
+        for (ModulePropertyField value : ModulePropertyField.values()) {
             if (!value.isOptional() && !properties.containsKey(value.name())) {
                 return false;
             }
@@ -50,7 +50,7 @@ public class ModuleConfig extends AbstractModuleConfig {
      * @return config or default value
      * @throws IllegalArgumentException if the field is null
      */
-    public String getProperty(ModuleConfigField field) {
+    public String getProperty(ModulePropertyField field) {
         if (field == null) {
             throw new IllegalArgumentException("field can not be null");
         }

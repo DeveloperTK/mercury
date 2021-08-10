@@ -10,5 +10,9 @@
         <Root level="info">
             <AppenderRef ref="Console"/>
         </Root>
+
+        <Logger name="net.dv8tion.jda" level="WARN">
+            <AppenderRef ref="Console"/>
+        </Logger>
     </Loggers>
 </Configuration>

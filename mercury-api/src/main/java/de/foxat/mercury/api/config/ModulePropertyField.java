@@ -1,6 +1,6 @@
 package de.foxat.mercury.api.config;
 
-public enum ModuleConfigField {
+public enum ModulePropertyField {
     NAME,
     VERSION,
     AUTHOR,
@@ -14,12 +14,12 @@ public enum ModuleConfigField {
     private final boolean optional;
     private final String defaultValue;
 
-    ModuleConfigField() {
+    ModulePropertyField() {
         optional = false;
         defaultValue = "";
     }
 
-    ModuleConfigField(String defaultValue) {
+    ModulePropertyField(String defaultValue) {
         optional = true;
         this.defaultValue = defaultValue;
     }

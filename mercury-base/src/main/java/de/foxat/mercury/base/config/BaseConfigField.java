@@ -1,5 +1,6 @@
 package de.foxat.mercury.base.config;
 
+@Deprecated(forRemoval = true)
 public enum BaseConfigField {
     DISCORD_TOKEN,
     HOME_GUILD(null),

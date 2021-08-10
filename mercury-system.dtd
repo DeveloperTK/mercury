@@ -1,0 +1,22 @@
+<?xml encoding="UTF-8"?>
+
+<!ELEMENT mercury (name,instances)>
+<!ATTLIST mercury xmlns CDATA #FIXED ''>
+
+    <!ELEMENT instances (root,instance)>
+    <!ATTLIST instances xmlns CDATA #FIXED ''>
+
+        <!ELEMENT root (name,id,token)>
+        <!ATTLIST root xmlns CDATA #FIXED ''>
+
+        <!ELEMENT instance (name,id,token)>
+        <!ATTLIST instance xmlns CDATA #FIXED ''>
+
+<!ELEMENT name (#PCDATA)>
+<!ATTLIST name xmlns CDATA #FIXED ''>
+
+<!ELEMENT id (#PCDATA)>
+<!ATTLIST id xmlns CDATA #FIXED ''>
+
+<!ELEMENT token (#PCDATA)>
+<!ATTLIST token xmlns CDATA #FIXED ''>

@@ -1,7 +1,8 @@
 package de.foxat.mercury.base.modules;
 
+import de.foxat.mercury.api.Mercury;
 import de.foxat.mercury.api.MercuryModule;
-import de.foxat.mercury.api.config.ModuleConfigField;
+import de.foxat.mercury.api.config.ModulePropertyField;
 import de.foxat.mercury.base.MercuryLoader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -29,6 +30,8 @@ public class ModuleLoader {
 
     private final Logger logger;
 
+    private Mercury mercury;
+
     /**
      * The ModuleManager is responsible for loading, enabling
      * and disabling all modules. It searches the local module
@@ -49,6 +52,14 @@ public class ModuleLoader {
     }
 
     /**
+     * Cannot be constructor parameter because of cyclic dependencies
+     * @param mercury mercury system
+     */
+    public void setMercury(Mercury mercury) {
+        this.mercury = mercury;
+    }
+
+    /**
      * Only searches the modules directory inside
      * the plugin folder and loads them.
      * */
@@ -63,8 +74,8 @@ public class ModuleLoader {
     public void enableLoadedModules() {
         modules.forEach((name, module) -> {
             logger.info("Enabling module {} version {} by {}.", name,
-                    module.getConfig().getProperty(ModuleConfigField.VERSION),
-                    module.getConfig().getProperty(ModuleConfigField.AUTHOR));
+                    module.getConfig().getProperty(ModulePropertyField.VERSION),
+                    module.getConfig().getProperty(ModulePropertyField.AUTHOR));
             module.tryEnable();
         });
     }
@@ -75,8 +86,8 @@ public class ModuleLoader {
     public void disableLoadedModules() {
         modules.forEach((name, module) -> {
             logger.info("Disabling module {} version {} by {}.", name,
-                    module.getConfig().getProperty(ModuleConfigField.VERSION),
-                    module.getConfig().getProperty(ModuleConfigField.AUTHOR));
+                    module.getConfig().getProperty(ModulePropertyField.VERSION),
+                    module.getConfig().getProperty(ModulePropertyField.AUTHOR));
             module.doDisable();
         });
     }
@@ -165,10 +176,10 @@ public class ModuleLoader {
 
     private void loadJARsFromURLIntoClasspath(URL[] urls) {
         try {
-            // Load all .jar files from the target directory into the SpigotMS classpath
+            // Load all .jar files from the target directory into the current classpath
             URLClassLoader moduleClassLoader = new URLClassLoader(urls, MercuryLoader.class.getClassLoader());
 
-            // A list of all module.yml config files found inside the directory
+            // A list of all module.properties config files found inside the directory
             Enumeration<URL> configPaths = moduleClassLoader.findResources("module.properties");
 
             if (!configPaths.hasMoreElements()) {
@@ -182,8 +193,8 @@ public class ModuleLoader {
                 InputStreamReader configFileStream = new InputStreamReader(nextUrl.openStream());
 
                 try {
-                    ModuleConfig moduleConfig = new ModuleConfig(configFileStream);
-                    initializeModule(moduleClassLoader, moduleConfig);
+                    ModuleProperties moduleProperties = new ModuleProperties(configFileStream);
+                    initializeModule(moduleClassLoader, moduleProperties);
                 } catch (IllegalStateException exception) {
                     logger.error("Found invalid module configuration inside " + nextUrl.getPath(), exception);
                 }
@@ -193,26 +204,29 @@ public class ModuleLoader {
         }
     }
 
-    public void initializeModule(URLClassLoader moduleClassLoader, ModuleConfig config) {
+    public void initializeModule(URLClassLoader moduleClassLoader, ModuleProperties config) {
         try {
             // Load the target class
-            Class<?> testModuleClass = Class.forName(config.getProperty(ModuleConfigField.MAIN_CLASS),
+            Class<?> testModuleClass = Class.forName(config.getProperty(ModulePropertyField.MAIN_CLASS),
                     true, moduleClassLoader);
 
             // Create an instance of the targeted class
             MercuryModule moduleInstance = (MercuryModule)
                     testModuleClass.getDeclaredConstructor().newInstance();
 
-            moduleInstance.setEnabledByDefault(Boolean.parseBoolean(config.getProperty(ModuleConfigField.ENABLED)));
+            moduleInstance.setEnabledByDefault(Boolean.parseBoolean(config.getProperty(ModulePropertyField.ENABLED)));
             moduleInstance.setConfig(config);
+            moduleInstance.setMercury(mercury);
 
             // Add the module to the list
-            modules.put(config.getProperty(ModuleConfigField.NAME), moduleInstance);
+            modules.put(config.getProperty(ModulePropertyField.NAME), moduleInstance);
+
+            moduleInstance.doLoad();
         } catch (InstantiationException | InvocationTargetException | NoSuchMethodException
                 | IllegalAccessException | ClassNotFoundException exception) {
 
             // Could either not cast to MercuryModule or the jar is obfuscated
-            logger.error("Could not load module at " + config.getProperty(ModuleConfigField.MAIN_CLASS), exception);
+            logger.error("Could not load module at " + config.getProperty(ModulePropertyField.MAIN_CLASS), exception);
             exception.printStackTrace();
         }
 
