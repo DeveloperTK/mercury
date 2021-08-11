@@ -3,6 +3,7 @@ package de.foxat.mercury.api.tasks;
 import de.foxat.mercury.api.Mercury;
 import net.dv8tion.jda.api.JDA;
 
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 public interface TaskScheduler {
@@ -13,4 +14,7 @@ public interface TaskScheduler {
      */
     void submit(BiConsumer<JDA, Mercury> task);
 
+    void shutdown();
+
+    boolean awaitTermination(long timeout, TimeUnit timeUnit) throws InterruptedException;
 }

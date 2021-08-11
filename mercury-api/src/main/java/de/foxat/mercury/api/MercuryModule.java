@@ -46,7 +46,14 @@ public abstract class MercuryModule {
     }
 
     public final void dispatchCommandEvent(SlashCommandEvent slashCommandEvent) {
-        onCommand(slashCommandEvent);
+        try {
+            onCommand(slashCommandEvent);
+        } catch (Exception exception) {
+            logger.error(String.format("Caught exception in command handler for %s in module %s",
+                    slashCommandEvent.getName(),
+                    getConfig().getProperty(ModulePropertyField.NAME)
+            ), exception);
+        }
     }
 
     public Logger getLogger() {
