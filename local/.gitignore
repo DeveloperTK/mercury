@@ -1,4 +1,4 @@
 config/*.properties
-config/*.xml
+config/mercury-system.xml
 modules/
 log/

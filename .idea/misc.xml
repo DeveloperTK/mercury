@@ -5,6 +5,7 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/pom.xml" />
+        <option value="$PROJECT_DIR$/mercury-modules/mm-music/pom.xml" />
       </list>
     </option>
   </component>

@@ -1,12 +1,12 @@
 package de.foxat.mercury.base;
 
 import de.foxat.mercury.api.Mercury;
-import de.foxat.mercury.api.MercuryModule;
+import de.foxat.mercury.api.audio.GuildAudioManager;
 import de.foxat.mercury.api.command.CommandRegistry;
-import de.foxat.mercury.api.config.DiscordInstance;
 import de.foxat.mercury.api.config.MercuryConfig;
 import de.foxat.mercury.api.event.MercuryScheduler;
 import de.foxat.mercury.api.tasks.TaskScheduler;
+import de.foxat.mercury.base.audio.GuildAudioManagerImpl;
 import de.foxat.mercury.base.command.CommandHandler;
 import de.foxat.mercury.base.config.XMLMercuryConfig;
 import de.foxat.mercury.base.discord.MercurySystem;
@@ -26,11 +26,13 @@ public class MercuryImpl implements Mercury {
     private final MercurySystem mercurySystem;
     private final MercuryScheduler mercuryScheduler;
     private final CommandHandler commandHandler;
+    private final GuildAudioManager guildAudioManager;
 
     public MercuryImpl(MercurySystem mercurySystem, ModuleLoader moduleLoader) {
         this.mercurySystem = mercurySystem;
         this.mercuryScheduler = new MercurySchedulerImpl();
         this.commandHandler = new CommandHandler(moduleLoader, getRootInstance());
+        this.guildAudioManager = new GuildAudioManagerImpl(mercurySystem);
 
         getRootInstance().addEventListener(commandHandler);
     }
@@ -76,6 +78,11 @@ public class MercuryImpl implements Mercury {
     @Override
     public CommandRegistry getCommandRegistry() {
         return commandHandler;
+    }
+
+    @Override
+    public GuildAudioManager getAudioManager() {
+        return guildAudioManager;
     }
 
 }

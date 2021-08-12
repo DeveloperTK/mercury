@@ -1,5 +1,6 @@
 package de.foxat.mercury.api;
 
+import de.foxat.mercury.api.audio.GuildAudioManager;
 import de.foxat.mercury.api.command.CommandRegistry;
 import de.foxat.mercury.api.config.MercuryConfig;
 import de.foxat.mercury.api.event.MercuryScheduler;
@@ -25,6 +26,8 @@ public interface Mercury {
     TaskScheduler newRoundRobinScheduler(String guildId);
 
     CommandRegistry getCommandRegistry();
+
+    GuildAudioManager getAudioManager();
 
     default TaskScheduler newRoundRobinScheduler(long guildId) {
         return newRoundRobinScheduler(String.valueOf(guildId));

@@ -45,11 +45,7 @@ public class MassMover extends MercuryModule {
 
     @Override
     protected void onEnable() {
-        getMercury().getInstances().forEach(jda -> jda
-                .getGuildById("847571600014442596")
-                .getAudioManager()
-                .openAudioConnection(jda.getVoiceChannelById("869634242584391770"))
-        );
+
     }
 
     @Override

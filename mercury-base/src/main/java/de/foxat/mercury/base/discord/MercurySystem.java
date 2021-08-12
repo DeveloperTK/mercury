@@ -7,8 +7,11 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.events.guild.GuildJoinEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import javax.security.auth.login.LoginException;
 import java.util.HashMap;
@@ -46,9 +49,30 @@ public class MercurySystem {
             instances.put(instance.getId(), JDABuilder.createDefault(instance.getToken())
                     .setStatus(OnlineStatus.IDLE).setActivity(Activity.watching("startup...")).build());
 
+            preventLooseWorkerInstances(instances.get(instance.getId()));
+
         } catch (LoginException exception) {
             logger.error("Caught LoginException at instance " + instance, exception);
         }
+    }
+
+    private void preventLooseWorkerInstances(JDA instance) {
+        String rootId = XMLMercuryConfig.getInstance().getRootInstance().getId();
+
+        if (instance.getSelfUser().getId().equals(rootId)) return;
+
+        instance.addEventListener(new ListenerAdapter() {
+            @Override
+            public void onGuildJoin(@NotNull GuildJoinEvent event) {
+                if (getInstances().get(rootId).getGuildById(event.getGuild().getId()) == null) {
+                    logger.error("Tried inviting instance " + event.getJDA().getSelfUser().getId()
+                            + " to a server missing the root instance, aborting...");
+                    event.getGuild().getDefaultChannel().sendMessage("Cannot enter server without root instance. "
+                            + "Please invite the root instance first before adding workers!").queue();
+                    event.getGuild().leave().queue();
+                }
+            }
+        });
     }
 
     private void finalizeStartup(String id, JDA jda) {

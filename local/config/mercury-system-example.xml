@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- <!DOCTYPE mercury SYSTEM "../mercury-system.dtd"> -->
+<mercury>
+    <system>
+        <name>Example bot based on Mercury-Runtime</name>
+        <mainInstance>discord-application-id</mainInstance>
+        <lazyModules>true</lazyModules>
+    </system>
+
+    <config>
+        <hasHomeGuild>false</hasHomeGuild>
+        <!-- Uncomment the following line if your system has a home guild
+        (note that some modules need a home guild to work properly) -->
+        <!-- <homeGuild>discord-guild-id</homeGuild> -->
+    </config>
+
+    <instances>
+        <!--
+        While you need to have exactly one root instance, you cann add more worker bots. Mercury can coordinate up
+        to ~75 separate Discord applications simultaneously before running into network issues.
+
+        If you run into application rate limits, just add more instances. Please keep in mind not to flood the
+        discord api with bad requests (401, 403 or 429) or you will be temporarily banned by cloudflare.
+        -->
+
+        <root>
+            <id>discord-application-id</id>
+            <token>discord-bot-token</token>
+        </root>
+
+        <instance>
+            <name>Worker Instance A</name>
+            <id>discord-application-id</id>
+            <token>discord-bot-token</token>
+        </instance>
+        <instance>
+            <name>Worker Instance B</name>
+            <id>discord-application-id</id>
+            <token>discord-bot-token</token>
+        </instance>
+    </instances>
+</mercury>
