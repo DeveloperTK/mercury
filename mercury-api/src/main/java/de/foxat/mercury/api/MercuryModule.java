@@ -6,6 +6,8 @@ import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.File;
+
 public abstract class MercuryModule {
 
     private boolean enabledByDefault;
@@ -54,6 +56,10 @@ public abstract class MercuryModule {
                     getConfig().getProperty(ModulePropertyField.NAME)
             ), exception);
         }
+    }
+
+    public File getModuleDirectory() {
+        return new File("modules/" + getConfig().getProperty(ModulePropertyField.NAME));
     }
 
     public Logger getLogger() {

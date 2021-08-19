@@ -9,11 +9,14 @@ import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 
 public class Music extends MercuryModule {
 
+    private MusicInteractionListener interactionListener;
     private MusicCommandHandler commandHandler;
 
     @Override
     protected void onLoad() {
+        interactionListener = new MusicInteractionListener(this);
         commandHandler = new MusicCommandHandler(this);
+
         getMercury().getCommandRegistry().registerCommand(this,
                 new CommandData("music", "Play music in discord voice channels").addSubcommands(
                         new SubcommandData("join", "Summon a music bot to your channel"),
@@ -30,16 +33,24 @@ public class Music extends MercuryModule {
 
     @Override
     protected void onEnable() {
-
+        getMercury().addRootListener(interactionListener);
     }
 
     @Override
     protected void onDisable() {
-
+        getMercury().removeRootListener(interactionListener);
     }
 
     @Override
     protected void onCommand(SlashCommandEvent slashCommandEvent) {
         commandHandler.onCommand(slashCommandEvent);
+    }
+
+    public MusicCommandHandler getCommandHandler() {
+        return commandHandler;
+    }
+
+    public MusicInteractionListener getInteractionListener() {
+        return interactionListener;
     }
 }

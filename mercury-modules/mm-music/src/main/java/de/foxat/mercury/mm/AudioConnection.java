@@ -30,6 +30,10 @@ public class AudioConnection extends AudioEventAdapter {
         return audioPlayer;
     }
 
+    public Queue<AudioTrack> getTrackQueue() {
+        return trackQueue;
+    }
+
     /**
      * Enqueues or plays a track
      *
@@ -37,15 +41,17 @@ public class AudioConnection extends AudioEventAdapter {
      * @return true - the track was enqueued, false - the track was played immediately
      */
     public boolean enqueueTrack(AudioTrack track) {
-        // if no track is currently playing
-        if (audioPlayer.getPlayingTrack() == null
-                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.INACTIVE)
-                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.FINISHED)) {
-            audioPlayer.playTrack(track);
-            return false;
-        } else {
-            trackQueue.add(track);
-            return true;
+        synchronized (trackQueue) {
+            // if no track is currently playing
+            if (audioPlayer.getPlayingTrack() == null
+                    || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.INACTIVE)
+                    || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.FINISHED)) {
+                audioPlayer.playTrack(track);
+                return false;
+            } else {
+                trackQueue.add(track);
+                return true;
+            }
         }
     }
 

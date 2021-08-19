@@ -43,11 +43,15 @@ public class CommandHandler extends ListenerAdapter implements CommandRegistry {
 
         commands.put(commandData.getName(), module.getConfig().getProperty(ModulePropertyField.NAME));
 
-        if (global) {
-            rootInstance.upsertCommand(commandData).queue();
-        } else {
-            rootInstance.getGuilds().forEach(guild -> guild.upsertCommand(commandData).queue());
-            guildCommands.add(commandData);
+        try {
+            if (global) {
+                rootInstance.upsertCommand(commandData).queue();
+            } else {
+                rootInstance.getGuilds().forEach(guild -> guild.upsertCommand(commandData).queue());
+                guildCommands.add(commandData);
+            }
+        } catch (NullPointerException exception) {
+            logger.error("Command Logging does not work if the disableGlobalInstances is true!", exception);
         }
 
         logger.info("Registered command {} in module {}",

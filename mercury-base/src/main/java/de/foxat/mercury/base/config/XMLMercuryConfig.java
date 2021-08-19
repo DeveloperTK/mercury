@@ -29,6 +29,7 @@ public class XMLMercuryConfig implements MercuryConfig {
 
     // config properties
 
+    private boolean isGlobalInstancesDisabled;
     private boolean homeGuild;
     private String homeGuildId;
 
@@ -61,6 +62,11 @@ public class XMLMercuryConfig implements MercuryConfig {
         homeGuild = Boolean.parseBoolean(config.getElementsByTagName("hasHomeGuild").item(0).getTextContent());
         if (homeGuild) {
             homeGuildId = config.getElementsByTagName("homeGuild").item(0).getTextContent();
+        }
+
+        NodeList disableGlobalInstances = config.getElementsByTagName("disableGlobalInstances");
+        if (disableGlobalInstances.getLength() > 0) {
+            this.isGlobalInstancesDisabled = Boolean.parseBoolean(disableGlobalInstances.item(0).getTextContent());
         }
     }
 
@@ -118,6 +124,11 @@ public class XMLMercuryConfig implements MercuryConfig {
     }
 
     @Override
+    public boolean isGlobalInstancesDisabled() {
+        return isGlobalInstancesDisabled;
+    }
+
+    @Override
     public boolean isLazyLoaded() {
         return lazyLoaded;
     }
@@ -139,6 +150,10 @@ public class XMLMercuryConfig implements MercuryConfig {
 
     @Override
     public List<DiscordInstance> getInstances() {
+        if (isGlobalInstancesDisabled()) {
+            return List.of();
+        }
+
         return discordInstances;
     }
 }

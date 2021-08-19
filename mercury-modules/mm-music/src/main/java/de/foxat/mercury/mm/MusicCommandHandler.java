@@ -6,11 +6,8 @@ import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioSourceManager
 import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioTrack;
 import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeSearchProvider;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
-import com.sedmelluq.discord.lavaplayer.track.AudioItem;
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
-import com.sedmelluq.discord.lavaplayer.track.BasicAudioPlaylist;
-import de.foxat.mercury.api.MercuryModule;
+import com.sedmelluq.discord.lavaplayer.track.*;
+import de.foxat.mercury.api.audio.AudioPlayerSendHandler;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.VoiceChannel;
@@ -27,15 +24,19 @@ public class MusicCommandHandler {
 
     private static final float VOLUME_REDUCTION = 0.5f;
 
-    private final MercuryModule parent;
+    private final Music parent;
+    private final MusicInteractionListener interactionListener;
+
     private final Map<String, AudioConnection> playerMap;
     private final AudioPlayerManager playerManager;
 
     private final YoutubeSearchProvider youtubeSearchProvider;
     private final YoutubeAudioSourceManager youtubeAudioSourceManager;
 
-    public MusicCommandHandler(MercuryModule parent) {
+    public MusicCommandHandler(Music parent) {
         this.parent = parent;
+        this.interactionListener = parent.getInteractionListener();
+
         this.playerMap = new HashMap<>();
         this.playerManager = new DefaultAudioPlayerManager();
         AudioSourceManagers.registerRemoteSources(playerManager);
@@ -44,14 +45,14 @@ public class MusicCommandHandler {
         youtubeAudioSourceManager = new YoutubeAudioSourceManager();
     }
 
-    private AudioPlayer createPlayer(String guildId, String applicationId) {
+    AudioPlayer createPlayer(String guildId, String applicationId) {
         AudioPlayer player = playerManager.createPlayer();
         player.setVolume((int) (player.getVolume() * VOLUME_REDUCTION));
         playerMap.put(guildId + applicationId, new AudioConnection(player));
         return player;
     }
 
-    private void removePlayer(String guildId, String applicationId) {
+    void removePlayer(String guildId, String applicationId) {
         this.playerMap.remove(guildId + applicationId);
     }
 
@@ -81,14 +82,17 @@ public class MusicCommandHandler {
                 youtube(event, channel);
                 return;
             case "pause":
-
+                pause(event, channel);
+                return;
+            case "skip":
+                skip(event, channel);
                 return;
             default:
                 event.reply("Error: Subcommand not found!").queue();
         }
     }
 
-    private AudioPlayer createAndConnect(VoiceChannel channel, String guildId, String instanceId) {
+    AudioPlayer createAndConnect(VoiceChannel channel, String guildId, String instanceId) {
         AudioManager audioManager = Objects.requireNonNull(parent.getMercury().getInstanceById(instanceId)
                 .getGuildById(guildId)).getAudioManager();
         audioManager.openAudioConnection(channel);
@@ -97,7 +101,7 @@ public class MusicCommandHandler {
         return audioPlayer;
     }
 
-    private String findApplication(VoiceChannel channel) {
+    String findApplication(VoiceChannel channel) {
         for (Member member : channel.getMembers()) {
             for (JDA instance : parent.getMercury().getInstances()) {
                 if (instance.getSelfUser().getId().equals(member.getId())) {
@@ -140,7 +144,7 @@ public class MusicCommandHandler {
         }
     }
 
-    private AudioConnection connectOrGetConnection(SlashCommandEvent event, VoiceChannel channel) {
+    AudioConnection connectOrGetConnection(SlashCommandEvent event, VoiceChannel channel) {
         String instanceId = findApplication(channel);
         String key = event.getGuild().getId() + instanceId;
 
@@ -169,14 +173,22 @@ public class MusicCommandHandler {
             @Override
             public void trackLoaded(AudioTrack audioTrack) {
                 parent.getLogger().info("Loaded new audio track " + audioTrack.getInfo().title);
-                connection.enqueueTrack(audioTrack);
-                event.reply("Playing **" + audioTrack.getInfo().title + "**").queue();
+                if (connection.enqueueTrack(audioTrack)) {
+                    event.reply("Queued **" + audioTrack.getInfo().title + "**").queue();
+                } else {
+                    event.reply("Playing **" + audioTrack.getInfo().title + "**").queue();
+                }
             }
 
             @Override
             public void playlistLoaded(AudioPlaylist audioPlaylist) {
                 parent.getLogger().info("Loaded playlist " + audioPlaylist.getName());
-                connection.enqueueTrack(audioPlaylist.getSelectedTrack());
+
+                int selected = audioPlaylist.getTracks().indexOf(audioPlaylist.getSelectedTrack());
+                for (int i = selected; i < audioPlaylist.getTracks().size(); i++) {
+                    connection.enqueueTrack(audioPlaylist.getTracks().get(i));
+                }
+
                 event.reply("Loaded playlist **" + audioPlaylist.getName() + "**").queue();
             }
 
@@ -222,6 +234,62 @@ public class MusicCommandHandler {
 
         } else {
             event.reply("Could not find any videos for query: **" + query + "**").queue();
+        }
+    }
+
+    private void pause(SlashCommandEvent event, VoiceChannel channel) {
+        String instanceId = findApplication(channel);
+
+        if (instanceId == null) {
+            event.reply("Cannot find a music instance to pause").queue();
+        }
+
+        // toggle paused state
+        AudioPlayer audioPlayer = playerMap.get(event.getGuild().getId() + instanceId).getAudioPlayer();
+
+        if (audioPlayer.getPlayingTrack() == null
+                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.INACTIVE)
+                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.FINISHED)) {
+            event.reply("There is nothing playing at the moment").queue();
+        }
+
+        if (audioPlayer.isPaused()) {
+            audioPlayer.setPaused(false);
+            event.reply("Resumed the current track").queue();
+        } else {
+            audioPlayer.setPaused(true);
+            event.reply("Paused the current track").queue();
+        }
+    }
+
+    private void skip(SlashCommandEvent event, VoiceChannel channel) {
+        String instanceId = findApplication(channel);
+
+        if (instanceId == null) {
+            event.reply("Cannot find a music instance to pause").queue();
+        }
+
+        // toggle paused state
+        AudioConnection connection = playerMap.get(event.getGuild().getId() + instanceId);
+        AudioPlayer audioPlayer = connection.getAudioPlayer();
+
+        if (audioPlayer.getPlayingTrack() == null
+                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.INACTIVE)
+                || audioPlayer.getPlayingTrack().getState().equals(AudioTrackState.FINISHED)) {
+            event.reply("There is nothing playing at the moment.").queue();
+        }
+
+        audioPlayer.stopTrack();
+
+        synchronized (connection.getTrackQueue()) {
+            if (connection.getTrackQueue().isEmpty()) {
+                event.reply("Skipped current track.").queue();
+            } else {
+                AudioTrack newTrack = connection.getTrackQueue().poll();
+                audioPlayer.playTrack(newTrack);
+
+                event.reply("Skipped current track. Playing **" + newTrack.getInfo().title + "**").queue();
+            }
         }
     }
 

@@ -3,34 +3,18 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <artifactId>mercury</artifactId>
+        <artifactId>mercury-modules</artifactId>
         <groupId>de.foxat</groupId>
         <version>1.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>mercury-modules</artifactId>
-    <packaging>pom</packaging>
-
-    <modules>
-        <module>mm-system-integrity-test</module>
-        <module>mm-mass-mover</module>
-        <module>mm-music</module>
-        <module>mm-radio</module>
-    </modules>
+    <artifactId>mm-radio</artifactId>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
     </properties>
 
-    <dependencies>
-        <dependency>
-            <groupId>de.foxat</groupId>
-            <artifactId>mercury-api</artifactId>
-            <version>${parent.version}</version>
-            <scope>provided</scope>
-        </dependency>
-    </dependencies>
 
 </project>

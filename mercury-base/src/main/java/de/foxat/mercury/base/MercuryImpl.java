@@ -14,6 +14,9 @@ import de.foxat.mercury.base.event.MercurySchedulerImpl;
 import de.foxat.mercury.base.modules.ModuleLoader;
 import de.foxat.mercury.base.tasks.RoundRobinTaskScheduler;
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +25,8 @@ import java.util.List;
  * 
  */
 public class MercuryImpl implements Mercury {
+
+    private static final Logger ROOT_EVENTS_LOGGER = LogManager.getLogger("RootInstanceEvent");
 
     private final MercurySystem mercurySystem;
     private final MercuryScheduler mercuryScheduler;
@@ -34,7 +39,8 @@ public class MercuryImpl implements Mercury {
         this.commandHandler = new CommandHandler(moduleLoader, getRootInstance());
         this.guildAudioManager = new GuildAudioManagerImpl(mercurySystem);
 
-        getRootInstance().addEventListener(commandHandler);
+        if (!XMLMercuryConfig.getInstance().isGlobalInstancesDisabled())
+            getRootInstance().addEventListener(commandHandler);
     }
 
     @Override
@@ -63,6 +69,18 @@ public class MercuryImpl implements Mercury {
                 .filter(jda -> jda.getSelfUser().getId().equals(id))
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Override
+    public void addRootListener(ListenerAdapter listenerAdapters) {
+        getRootInstance().addEventListener(listenerAdapters);
+        ROOT_EVENTS_LOGGER.info("Added new event listener: " + listenerAdapters.getClass().getSimpleName());
+    }
+
+    @Override
+    public void removeRootListener(ListenerAdapter listenerAdapters) {
+        getRootInstance().removeEventListener(listenerAdapters);
+        ROOT_EVENTS_LOGGER.info("Removed new event listener: " + listenerAdapters.getClass().getSimpleName());
     }
 
     @Override

@@ -8,6 +8,8 @@ public interface MercuryConfig {
 
     String getMainInstanceId();
 
+    boolean isGlobalInstancesDisabled();
+
     boolean isLazyLoaded();
 
     boolean hasHomeGuild();

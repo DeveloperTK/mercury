@@ -1,4 +1,4 @@
-package de.foxat.mercury.mm;
+package de.foxat.mercury.api.audio;
 
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
