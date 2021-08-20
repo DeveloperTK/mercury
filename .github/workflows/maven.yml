@@ -36,7 +36,7 @@ jobs:
 
     - name: Copy Artifacts
       run: |
-        cd ${{ github.workspace }}; mkdir -p artifacts; find . -name "*.jar" -type f -exec cp {} ./artifacts \;
+        cd ${{ github.workspace }}; rm -rf artifacts; mkdir -p artifacts; find . -name "*.jar" -type f -exec cp {} ./artifacts \;
 
     - name: Upload file
       uses: actions/upload-artifact@v2.2.0

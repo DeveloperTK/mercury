@@ -5,18 +5,12 @@ import net.dv8tion.jda.api.entities.VoiceChannel;
 import net.dv8tion.jda.api.events.guild.voice.*;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import okhttp3.*;
-import org.apache.http.entity.ContentType;
+import okhttp3.internal.annotations.EverythingIsNonNull;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.*;
-import java.net.http.HttpRequest;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,8 +20,6 @@ public class JoinLeaveListener extends ListenerAdapter {
     private static final Logger logger = LogManager.getLogger(JoinLeaveListener.class.getSimpleName());
 
     private final Collection<RadioInstance> radios;
-
-    private boolean unmuting = false;
 
     public JoinLeaveListener(Collection<RadioInstance> radios) {
         this.radios = radios;
@@ -41,25 +33,7 @@ public class JoinLeaveListener extends ListenerAdapter {
 
         for (RadioInstance channelRadio : channelRadios) {
             if (event.getMember().getId().equals(channelRadio.getDiscordInstance().getId())) {
-                // TODO: :woozy_face:
-                jazz(event, channelRadio.getDiscordInstance());
-                /*
-                if (unmuting) return; else unmuting = true;
-                // event.getGuild().moveVoiceMember(event.getMember(), getOtherThanAFKChannel(event)).queue();
-                event.getMember().mute(true).queue();
-                // event.getGuild().moveVoiceMember(event.getMember(), event.getChannelJoined()).queue();
-                try {
-                    Thread.sleep(5_000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                event.getMember().mute(false).queue();
-                unmuting = false;
-                 */
-                /*if (event.getMember().getVoiceState().isGuildMuted()) {
-                    channelRadio.getJda().getGuildById(event.getGuild().getId()).getAudioManager().closeAudioConnection();
-                    channelRadio.getJda().getGuildById(event.getGuild().getId()).getAudioManager().openAudioConnection(event.getChannelJoined());
-                }*/
+                unmuteSelf(event, channelRadio.getDiscordInstance());
             } else if (!allMembersBots(event.getChannelJoined())) {
                 logger.info("Resumed radio named " + channelRadio.getDiscordInstance().getName());
                 channelRadio.getAudioPlayer().setPaused(false);
@@ -67,7 +41,7 @@ public class JoinLeaveListener extends ListenerAdapter {
         }
     }
 
-    private void jazz(GuildVoiceJoinEvent event, DiscordInstance instance) {
+    private void unmuteSelf(GuildVoiceJoinEvent event, DiscordInstance instance) {
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
                 .url("https://discord.com/api/v9/guilds/" + event.getGuild().getId() + "/members/" + instance.getId())
@@ -77,27 +51,36 @@ public class JoinLeaveListener extends ListenerAdapter {
 
         client.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                logger.error("API Call failed", e);
+            @EverythingIsNonNull
+            public void onFailure(Call call, IOException exception) {
+                logger.error("API Call failed", exception);
             }
 
             @Override
+            @EverythingIsNonNull
             public void onResponse(Call call, Response response) throws IOException {
-                if (response.code() != 204) logger.info("Unmuted via API (probably...)\n" + response.body().string());
+                if (response.code() != 204) {
+                    assert response.body() != null;
+                    logger.info("Unmuted via API call (probably...)\n" + response.body().string());
+                }
             }
         });
     }
 
     @Override
     public void onGuildVoiceMove(@NotNull GuildVoiceMoveEvent event) {
+        List<RadioInstance> leftChannelRadios = radios.stream()
+                .filter(radio -> radio.getChannelId().equals(event.getChannelLeft().getId()))
+                .collect(Collectors.toList());
+
+        leftChannelRadios.stream()
+                .filter(radio -> radio.getDiscordInstance().getId().equals(event.getMember().getId()))
+                .forEach(RadioInstance::restart);
+
         if (event.getMember().getUser().isBot()) return;
 
         List<RadioInstance> joinedChannelRadios = radios.stream()
                 .filter(radio -> radio.getChannelId().equals(event.getChannelJoined().getId()))
-                .collect(Collectors.toList());
-
-        List<RadioInstance> leftChannelRadios = radios.stream()
-                .filter(radio -> radio.getChannelId().equals(event.getChannelLeft().getId()))
                 .collect(Collectors.toList());
 
         for (RadioInstance channelRadio : joinedChannelRadios) {
@@ -117,11 +100,15 @@ public class JoinLeaveListener extends ListenerAdapter {
 
     @Override
     public void onGuildVoiceLeave(@NotNull GuildVoiceLeaveEvent event) {
-        if (event.getMember().getUser().isBot()) return;
-
         List<RadioInstance> channelRadios = radios.stream()
                 .filter(radio -> radio.getChannelId().equals(event.getChannelLeft().getId()))
                 .collect(Collectors.toList());
+
+        channelRadios.stream()
+                .filter(radio -> radio.getDiscordInstance().getId().equals(event.getMember().getId()))
+                .forEach(RadioInstance::restart);
+
+        if (event.getMember().getUser().isBot()) return;
 
         for (RadioInstance channelRadio : channelRadios) {
             if (allMembersBots(event.getChannelLeft())) {

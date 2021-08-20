@@ -1,5 +1,6 @@
 package de.foxat.mercury.mm;
 
+import de.foxat.mercury.api.Mercury;
 import de.foxat.mercury.api.config.DiscordInstance;
 import org.apache.logging.log4j.Logger;
 import org.w3c.dom.Document;
@@ -17,16 +18,18 @@ import java.util.Map;
 
 public class XMLRadioConfiguration {
 
+    private final MercuryRadio parent;
     private final Logger logger;
     private final Document document;
 
     private String homeGuildId;
     private Map<String, RadioInstance> radios;
 
-    private XMLRadioConfiguration(File configFile, Logger logger) throws IOException,
+    private XMLRadioConfiguration(File configFile, MercuryRadio mercuryRadio) throws IOException,
             ParserConfigurationException, SAXException {
 
-        this.logger = logger;
+        this.parent = mercuryRadio;
+        this.logger = mercuryRadio.getLogger();
         document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(configFile);
         document.getDocumentElement().normalize();
 
@@ -72,6 +75,8 @@ public class XMLRadioConfiguration {
 
             try {
                 radios.putIfAbsent(name, new RadioInstance(
+                        logger,
+                        homeGuildId,
                         discord,
                         currentInstance.getElementsByTagName("channel").item(0).getTextContent(),
                         currentInstance.getElementsByTagName("playlist").item(0).getTextContent(),
@@ -85,9 +90,9 @@ public class XMLRadioConfiguration {
         logger.info("Loaded all radios");
     }
 
-    public static XMLRadioConfiguration create(File configFile, Logger logger) {
+    public static XMLRadioConfiguration create(File configFile, MercuryRadio mercuryRadio) {
         try {
-            return new XMLRadioConfiguration(configFile, logger);
+            return new XMLRadioConfiguration(configFile, mercuryRadio);
         } catch (FileNotFoundException exception) {
             throw new IllegalStateException("Config file not found!", exception);
         } catch (IllegalArgumentException | ParserConfigurationException | SAXException exception) {

@@ -1,18 +1,17 @@
 package de.foxat.mercury.mm;
 
-import com.sedmelluq.discord.lavaplayer.player.*;
+import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import de.foxat.mercury.api.MercuryModule;
-import de.foxat.mercury.api.audio.AudioPlayerSendHandler;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.VoiceChannel;
+import net.dv8tion.jda.api.managers.AudioManager;
 
 import java.io.File;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class MercuryRadio extends MercuryModule {
 
@@ -21,6 +20,8 @@ public class MercuryRadio extends MercuryModule {
 
     private JoinLeaveListener joinLeaveListener;
     private String listeningInstanceName;
+
+    private ScheduledExecutorService healthCheckExecutor;
 
     @Override
     protected void onLoad() {
@@ -32,7 +33,7 @@ public class MercuryRadio extends MercuryModule {
         try {
             radioConfig = XMLRadioConfiguration.create(
                     new File(getModuleDirectory().getPath() + "/radio.xml"),
-                    getLogger()
+                    this
             );
         } catch (IllegalStateException exception) {
             Error error = new ExceptionInInitializerError(exception);
@@ -46,9 +47,8 @@ public class MercuryRadio extends MercuryModule {
 
     @Override
     protected void onEnable() {
-        radioConfig.getRadios().values().forEach(this::enable);
-
         for (RadioInstance radio : radioConfig.getRadios().values()) {
+            radio.enable(playerManager);
             Guild home = radio.getJda().getGuildById(radioConfig.getHomeGuildId());
             if (home != null) {
                 listeningInstanceName = radio.getDiscordInstance().getName();
@@ -57,6 +57,9 @@ public class MercuryRadio extends MercuryModule {
                 break;
             }
         }
+
+        healthCheckExecutor = Executors.newSingleThreadScheduledExecutor();
+        healthCheckExecutor.scheduleAtFixedRate(this::checkActiveConnections, 1, 5, TimeUnit.MINUTES);
     }
 
     @Override
@@ -69,96 +72,37 @@ public class MercuryRadio extends MercuryModule {
         } else {
             getLogger().info("Did not remove any JoinLeaveListeners, none were registered.");
         }
-    }
 
-    private void enable(RadioInstance radio) {
         try {
-            radio.getJda().awaitReady();
-            Guild guild = radio.getJda().getGuildById(radioConfig.getHomeGuildId());
-
-            if (guild == null) {
-                getLogger().error("Radio " + radio.getDiscordInstance().getName()
-                        + " is not in guild " + radioConfig.getHomeGuildId());
-                return;
-            }
-
-            VoiceChannel channel = guild.getVoiceChannelById(radio.getChannelId());
-
-            if (channel == null) {
-                getLogger().error("Radio " + radio.getDiscordInstance().getName()
-                        + " could not find channel " + radio.getChannelId());
-                return;
-            }
-
-            guild.getAudioManager().openAudioConnection(channel);
-            guild.getAudioManager().setAutoReconnect(true);
-
-            AudioPlayer player = new DefaultAudioPlayer(playerManager);
-            player.addListener(new AudioRepeatListener(this));
-            player.setVolume(radio.getVolume());
-            radio.setAudioPlayer(player);
-
-            guild.getAudioManager().setSendingHandler(new AudioPlayerSendHandler(player));
-
-            loadTrack(radio.getPlaylistURL()).thenAccept(track -> {
-                if (track != null) {
-                    player.playTrack(track);
-
-                    if (channel.getMembers().stream().allMatch(member -> member.getUser().isBot())) {
-                        player.setPaused(true);
-                        getLogger().info("Paused radio {} on load because nobody was in channel {}",
-                                radio.getDiscordInstance().getName(), channel);
-                    }
-                }
-            });
-        } catch (InterruptedException exception) {
-            getLogger().error("Interrupted while waiting for JDA load on instance "
-                    + radio.getDiscordInstance().getName(), exception);
-        }
+            healthCheckExecutor.shutdown();
+            healthCheckExecutor.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {}
     }
 
     private void disable(RadioInstance instance) {
-        try {
-            Objects.requireNonNull(instance.getJda().getGuildById(radioConfig.getHomeGuildId()))
-                    .getAudioManager().closeAudioConnection();
-        } catch (NullPointerException ignored) {}
-
-        try {
-            instance.getAudioPlayer().stopTrack();
-        } catch (NullPointerException ignored) {}
-
+        instance.disable();
         instance.getJda().shutdown();
     }
 
-    public CompletableFuture<AudioTrack> loadTrack(String query) {
-        CompletableFuture<AudioTrack> future = new CompletableFuture<>();
+    /**
+     * Check if all discord bots are connected and restarts them if needed
+     */
+    private void checkActiveConnections() {
+        final String guildId = radioConfig.getHomeGuildId();
+        for (RadioInstance radio : radioConfig.getRadios().values()) {
+            VoiceChannel target = Objects.requireNonNull(radio.getJda().getVoiceChannelById(radio.getChannelId()));
+            AudioManager audioManager = Objects.requireNonNull(radio.getJda().getGuildById(guildId)).getAudioManager();
+            VoiceChannel current = Objects.requireNonNull(audioManager.getConnectedChannel());
 
-        playerManager.loadItem(query, new AudioLoadResultHandler() {
-            @Override
-            public void trackLoaded(AudioTrack track) {
-                future.complete(track);
+            if (!audioManager.isConnected() || !current.getId().equals(target.getId())) {
+                getLogger().warn("Radio \"" + radio.getDiscordInstance().getName() + "\" was disconnected, restarting");
+                radio.restart();
+            } else if (radio.getAudioPlayer().isPaused()) {
+                // unpause if paused and potentially trigger an error which would lead to a restart anyways
+                getLogger().warn("Radio \"" + radio.getDiscordInstance().getName() + "\" was paused, resuming");
+                radio.getAudioPlayer().setPaused(false);
             }
-
-            @Override
-            public void playlistLoaded(AudioPlaylist playlist) {
-                getLogger().warn("Only playing first track of playlist " + query);
-                future.complete(playlist.getTracks().get(0));
-            }
-
-            @Override
-            public void noMatches() {
-                getLogger().error("No matches for playlist " + query);
-                future.complete(null);
-            }
-
-            @Override
-            public void loadFailed(FriendlyException exception) {
-                getLogger().error("Failed to load playlist " + query, exception);
-                future.completeExceptionally(exception);
-            }
-        });
-
-        return future;
+        }
     }
 
 }

@@ -1,14 +1,29 @@
 package de.foxat.mercury.mm;
 
+import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
+import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayer;
+import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import de.foxat.mercury.api.audio.AudioPlayerSendHandler;
 import de.foxat.mercury.api.config.DiscordInstance;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.VoiceChannel;
+import org.apache.logging.log4j.Logger;
 
 import javax.security.auth.login.LoginException;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 public class RadioInstance {
 
+    private final Logger logger;
+
+    private final String homeGuildId;
     private final DiscordInstance discordInstance;
     private final JDA jda;
     private final String channelId;
@@ -16,8 +31,12 @@ public class RadioInstance {
     private final int volume;
 
     private AudioPlayer audioPlayer;
+    private DefaultAudioPlayerManager playerManager;
 
-    public RadioInstance(DiscordInstance discordInstance, String channelId, String playlistURL, int volume) {
+    public RadioInstance(Logger logger, String homeGuildId, DiscordInstance discordInstance, String channelId, String playlistURL, int volume) {
+        this.logger = logger;
+
+        this.homeGuildId = homeGuildId;
         this.discordInstance = discordInstance;
         this.channelId = channelId;
         this.playlistURL = playlistURL;
@@ -28,6 +47,102 @@ public class RadioInstance {
         } catch (LoginException exception) {
             throw new IllegalArgumentException("Could not create JDA instance", exception);
         }
+    }
+
+    public void enable(DefaultAudioPlayerManager playerManager) {
+        this.playerManager = playerManager;
+
+        try {
+            getJda().awaitReady();
+            Guild guild = getJda().getGuildById(homeGuildId);
+
+            if (guild == null) {
+                logger.error("Radio " + getDiscordInstance().getName()
+                        + " is not in guild " + homeGuildId);
+                return;
+            }
+
+            VoiceChannel channel = guild.getVoiceChannelById(getChannelId());
+
+            if (channel == null) {
+                logger.error("Radio " + getDiscordInstance().getName()
+                        + " could not find channel " + getChannelId());
+                return;
+            }
+
+            guild.getAudioManager().openAudioConnection(channel);
+            guild.getAudioManager().setAutoReconnect(true);
+
+            audioPlayer = new DefaultAudioPlayer(playerManager);
+            audioPlayer.addListener(new AudioRepeatListener(this));
+            audioPlayer.setVolume(getVolume());
+
+
+            guild.getAudioManager().setSendingHandler(new AudioPlayerSendHandler(audioPlayer));
+
+            loadTrack(getPlaylistURL()).thenAccept(track -> {
+                if (track != null) {
+                    audioPlayer.playTrack(track);
+
+                    if (channel.getMembers().stream().allMatch(member -> member.getUser().isBot())) {
+                        audioPlayer.setPaused(true);
+                        logger.info("Paused radio {} on load because nobody was in channel {}",
+                                getDiscordInstance().getName(), channel);
+                    }
+                }
+            });
+        } catch (InterruptedException exception) {
+            logger.error("Interrupted while waiting for JDA load on instance "
+                    + getDiscordInstance().getName(), exception);
+            enable(playerManager);
+        }
+    }
+
+    public void disable() {
+        try {
+            Objects.requireNonNull(getJda().getGuildById(homeGuildId)).getAudioManager().closeAudioConnection();
+        } catch (NullPointerException ignored) {}
+
+        audioPlayer.stopTrack();
+        audioPlayer.destroy();
+    }
+
+    public void restart() {
+        // we do not call disable() here, because that could cause some issues when re-opening the audio connection
+        audioPlayer.stopTrack();
+        audioPlayer.destroy();
+        enable(playerManager);
+    }
+
+    public CompletableFuture<AudioTrack> loadTrack(String query) {
+        CompletableFuture<AudioTrack> future = new CompletableFuture<>();
+
+        playerManager.loadItem(query, new AudioLoadResultHandler() {
+            @Override
+            public void trackLoaded(AudioTrack track) {
+                future.complete(track);
+            }
+
+            @Override
+            public void playlistLoaded(AudioPlaylist playlist) {
+                logger.warn("Only playing first track of playlist " + query);
+                future.complete(playlist.getTracks().get(0));
+            }
+
+            @Override
+            public void noMatches() {
+                logger.error("No matches for playlist " + query);
+                future.complete(null);
+            }
+
+            @Override
+            public void loadFailed(FriendlyException exception) {
+                logger.error("Failed to load playlist " + query, exception);
+                future.completeExceptionally(exception);
+            }
+        });
+
+        return future;
     }
 
     public DiscordInstance getDiscordInstance() {
@@ -54,7 +169,7 @@ public class RadioInstance {
         return audioPlayer;
     }
 
-    public void setAudioPlayer(AudioPlayer audioPlayer) {
-        this.audioPlayer = audioPlayer;
+    public DefaultAudioPlayerManager getPlayerManager() {
+        return playerManager;
     }
 }
