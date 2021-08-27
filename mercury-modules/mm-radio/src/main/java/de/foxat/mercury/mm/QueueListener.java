@@ -8,19 +8,30 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class AudioRepeatListener extends AudioEventAdapter {
+import java.util.Queue;
 
-    private static final Logger LOGGER = LogManager.getLogger(AudioRepeatListener.class.getSimpleName());
+public class QueueListener extends AudioEventAdapter {
+
+    private static final Logger LOGGER = LogManager.getLogger(QueueListener.class.getSimpleName());
 
     private final RadioInstance parent;
+    private final Queue<AudioTrack> trackQueue;
 
-    public AudioRepeatListener(RadioInstance parent) {
+    public QueueListener(RadioInstance parent, Queue<AudioTrack> trackQueue) {
         this.parent = parent;
+        this.trackQueue = trackQueue;
     }
 
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
-        player.playTrack(track.makeClone());
+        if (trackQueue.isEmpty()) {
+            parent.restart();
+            LOGGER.info(parent.getDiscordInstance().getName() + " - Finished playing all tracks, restarting");
+        } else {
+            // makeClone is called to avoid problems with temporary resources
+            player.playTrack(trackQueue.poll().makeClone());
+            LOGGER.info(parent.getDiscordInstance().getName() + " - playing next track");
+        }
     }
 
     @Override
@@ -39,5 +50,9 @@ public class AudioRepeatListener extends AudioEventAdapter {
     public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs, StackTraceElement[] stackTrace) {
         LOGGER.error("Audio track was stuck, restarting");
         parent.restart();
+    }
+
+    public Queue<AudioTrack> getTrackQueue() {
+        return trackQueue;
     }
 }

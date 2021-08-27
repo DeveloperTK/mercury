@@ -16,7 +16,10 @@ import net.dv8tion.jda.api.entities.VoiceChannel;
 import org.apache.logging.log4j.Logger;
 
 import javax.security.auth.login.LoginException;
+import java.util.ArrayDeque;
+import java.util.List;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 
 public class RadioInstance {
@@ -74,15 +77,15 @@ public class RadioInstance {
             guild.getAudioManager().setAutoReconnect(true);
 
             audioPlayer = new DefaultAudioPlayer(playerManager);
-            audioPlayer.addListener(new AudioRepeatListener(this));
             audioPlayer.setVolume(getVolume());
-
 
             guild.getAudioManager().setSendingHandler(new AudioPlayerSendHandler(audioPlayer));
 
-            loadTrack(getPlaylistURL()).thenAccept(track -> {
-                if (track != null) {
-                    audioPlayer.playTrack(track);
+            loadTrack(getPlaylistURL()).thenAccept(tracks -> {
+                if (tracks != null) {
+                    QueueListener queueListener = new QueueListener(this, new ArrayDeque<>(tracks));
+                    audioPlayer.addListener(queueListener);
+                    audioPlayer.playTrack(queueListener.getTrackQueue().poll());
 
                     if (channel.getMembers().stream().allMatch(member -> member.getUser().isBot())) {
                         audioPlayer.setPaused(true);
@@ -114,19 +117,20 @@ public class RadioInstance {
         enable(playerManager);
     }
 
-    public CompletableFuture<AudioTrack> loadTrack(String query) {
-        CompletableFuture<AudioTrack> future = new CompletableFuture<>();
+    public CompletableFuture<List<AudioTrack>> loadTrack(String query) {
+        CompletableFuture<List<AudioTrack>> future = new CompletableFuture<>();
 
         playerManager.loadItem(query, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
-                future.complete(track);
+                logger.info(getDiscordInstance().getName() + " - Loading Track " + query);
+                future.complete(List.of(track));
             }
 
             @Override
             public void playlistLoaded(AudioPlaylist playlist) {
-                logger.warn("Only playing first track of playlist " + query);
-                future.complete(playlist.getTracks().get(0));
+                logger.info(getDiscordInstance().getName() + " - Loading Playlist " + query);
+                future.complete(playlist.getTracks());
             }
 
             @Override
